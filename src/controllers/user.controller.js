@@ -6,9 +6,7 @@ import { ApiResponse } from '../utils/apiResponse.js';
 import fs from 'fs';
 
 const registerUser = asyncHandler(async (req, res) => {
-   
     const { username, fullName, password, email } = req.body;
-    console.log(username, fullName, password, email);
     if (
         [username, fullName, password, email].some(
             (value) => value?.trim() === ''
@@ -17,21 +15,42 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'all fields are required');
     }
     const isExist = await User.findOne({
-        $or: [{ username, email }],
+        $or: [{ username }, { email }],
     });
 
-    const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverLocalPath = req.files?.cover[0]?.path;
+    let coverLocalPath;
+    let avatarLocalPath;
+
+    if (
+        req.files &&
+        Array.isArray(req.files.cover) &&
+        req.files.cover.length > 0
+    ) {
+        coverLocalPath = req.files.cover[0].path;
+    }
+
+    if (
+        req.files &&
+        Array.isArray(req.files.avatar) &&
+        req.files.avatar.length > 0
+    ) {
+        avatarLocalPath = req.files.avatar[0].path;
+    }
 
     if (isExist) {
-        fs.unlinkSync(avatarLocalPath);
-        fs.unlinkSync(coverLocalPath);
+        if (avatarLocalPath) {
+            fs.unlinkSync(avatarLocalPath);
+        }
+        if (coverLocalPath) {
+            fs.unlinkSync(coverLocalPath);
+        }
         throw new ApiError(409, 'User with email or username already exists');
     }
 
     if (!avatarLocalPath) {
         throw new ApiError(400, 'avatar is required');
     }
+
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     const cover = await uploadOnCloudinary(coverLocalPath);
 
@@ -43,7 +62,7 @@ const registerUser = asyncHandler(async (req, res) => {
         fullName,
         username: username.toLowerCase(),
         avatar: avatar.url,
-        coverImage: cover.url || '',
+        coverImage: cover?.url || '',
         password,
         email,
     });
@@ -51,6 +70,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const createdUser = await User.findById(user._id).select(
         '-password -refreshToken'
     );
+
     if (!createdUser) {
         throw new ApiError(
             500,

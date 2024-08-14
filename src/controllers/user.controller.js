@@ -21,6 +21,7 @@ const registerUser = asyncHandler(async (req, res) => {
     let coverLocalPath;
     let avatarLocalPath;
 
+    // handling cover image
     if (
         req.files &&
         Array.isArray(req.files.cover) &&
@@ -28,7 +29,7 @@ const registerUser = asyncHandler(async (req, res) => {
     ) {
         coverLocalPath = req.files.cover[0].path;
     }
-
+    // handling avatar image
     if (
         req.files &&
         Array.isArray(req.files.avatar) &&
@@ -37,6 +38,7 @@ const registerUser = asyncHandler(async (req, res) => {
         avatarLocalPath = req.files.avatar[0].path;
     }
 
+    // if user exists then delete the uploaded files and throw error
     if (isExist) {
         if (avatarLocalPath) {
             fs.unlinkSync(avatarLocalPath);
@@ -51,6 +53,7 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'avatar is required');
     }
 
+    // upload images on cloudinary
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     const cover = await uploadOnCloudinary(coverLocalPath);
 
@@ -67,6 +70,7 @@ const registerUser = asyncHandler(async (req, res) => {
         email,
     });
 
+    // temporary fields deletion
     const createdUser = await User.findById(user._id).select(
         '-password -refreshToken'
     );

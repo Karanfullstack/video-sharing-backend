@@ -5,6 +5,19 @@ import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import fs from 'fs';
 
+const generateRefreshAndAccessToken = async (userId) => {
+    try {
+        const user = await User.findById(userId);
+        const refreshToken = await user.generateRefreshToken();
+        const accessToken = await user.generateAccessToken();
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false });
+        return { refreshToken, accessToken };
+    } catch (error) {
+        throw new ApiError(500, 'Error while generating refresh token');
+    }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
     const { username, fullName, password, email } = req.body;
     if (
@@ -86,4 +99,43 @@ const registerUser = asyncHandler(async (req, res) => {
         .json(new ApiResponse(201, createdUser, 'User has been created'));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+    const { email, username, password } = req.body;
+    if (!(email || username)) {
+        throw new ApiError(400, 'username or email is required');
+    }
+    const user = await User.findOne({
+        $or: [{ username }, { email }],
+    });
+    if (!user) {
+        throw new ApiError(404, 'User not found');
+    }
+    const isPassword = await user.isPasswordCorrect(password);
+
+    if (!isPassword) {
+        throw new ApiError(401, 'Password incorrect');
+    }
+    const { refreshToken, accessToken } = await generateRefreshAndAccessToken(
+        user._id
+    );
+    const loggedInUser = await User.findById(user._id).select(
+        '-password, -refreshToken'
+    );
+    const options = {
+        httpOnly: true,
+        secure: true,
+    };
+
+    return res
+        .status(200)
+        .cookie('accessToken', accessToken, options)
+        .cookie('refreshToken', refreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                { loggedInUser, accessToken, refreshToken },
+                'Success'
+            )
+        );
+});
+export { registerUser, loginUser };

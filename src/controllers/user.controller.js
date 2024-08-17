@@ -1,22 +1,12 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import User from '../models/user.model.js';
-import { ApiError } from '../utils/ApiError.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import fs from 'fs';
-
-const generateRefreshAndAccessToken = async (userId) => {
-    try {
-        const user = await User.findById(userId);
-        const refreshToken = await user.generateRefreshToken();
-        const accessToken = await user.generateAccessToken();
-        user.refreshToken = refreshToken;
-        await user.save({ validateBeforeSave: false });
-        return { refreshToken, accessToken };
-    } catch (error) {
-        throw new ApiError(500, 'Error while generating refresh token');
-    }
-};
+import { ApiError } from '../utils/ApiError.js';
+import { options } from '../constansts.js';
+import { generateRefreshAndAccessToken } from '../utils/generateTokens.js';
+import jwt from 'jsonwebtoken';
 
 const registerUser = asyncHandler(async (req, res) => {
     const { username, fullName, password, email } = req.body;
@@ -59,11 +49,13 @@ const registerUser = asyncHandler(async (req, res) => {
         if (coverLocalPath) {
             fs.unlinkSync(coverLocalPath);
         }
-        throw new ApiError(409, 'User with email or username already exists');
+        return res
+            .status(409)
+            .json({ message: 'User with email or username already exists' });
     }
 
     if (!avatarLocalPath) {
-        throw new ApiError(400, 'avatar is required');
+        return res.status(400).json({ message: 'Avatar is required' });
     }
 
     // upload images on cloudinary
@@ -71,7 +63,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const cover = await uploadOnCloudinary(coverLocalPath);
 
     if (!avatar) {
-        throw new ApiError(500, 'avatar upload failed');
+        return res.status(500).json({ message: 'Avatar upload failed' });
     }
 
     const user = await User.create({
@@ -121,10 +113,6 @@ const loginUser = asyncHandler(async (req, res) => {
     const loggedInUser = await User.findById(user._id).select(
         '-password, -refreshToken'
     );
-    const options = {
-        httpOnly: true,
-        secure: true,
-    };
 
     return res
         .status(200)
@@ -152,15 +140,45 @@ const logOutUser = asyncHandler(async (req, res) => {
             new: true,
         }
     );
-    const options = {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'None',
-    };
+
     return res
         .clearCookie('accessToken', options)
         .clearCookie('refreshToken', options)
-        .json(new ApiResponse(200, { logout }, 'Logged out successfully'));
+        .json(new ApiResponse(200, {}, 'Logged out successfully'));
 });
 
-export { registerUser, loginUser, logOutUser };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+    const token = req.cookies.refreshToken || req.body.refreshToken;
+    if (!token) {
+        return res.status(401).json({ message: 'RefreshToken not found' });
+    }
+    const decoded = jwt.verify(token, process.env.REFRESHTOKEN_SECRET);
+    if (!decoded) {
+        return res.status(401).json({ message: 'DecodedToken not found' });
+    }
+    const user = await User.findById(decoded._id);
+    if (!user) {
+        return res
+            .status(401)
+            .json({ message: 'User not found in DecodedToken' });
+    }
+    if (user.refreshToken !== token) {
+        return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+    const { accessToken, refreshToken } = await generateRefreshAndAccessToken(
+        user._id
+    );
+
+    return res
+        .cookie('accessToken', accessToken, options)
+        .cookie('refreshToken', refreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                { accessToken, refreshToken },
+                'Token refreshed successfully'
+            )
+        );
+});
+
+export { registerUser, loginUser, logOutUser, refreshAccessToken };

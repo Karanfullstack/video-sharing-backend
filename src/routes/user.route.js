@@ -5,9 +5,11 @@ import {
     registerUser,
     refreshAccessToken,
     passwordChange,
+    getCurrentUser,
 } from '../controllers/user.controller.js';
 import { upload } from '../middlewares/multer.middleware.js';
 import { auth } from '../middlewares/auth.middleware.js';
+
 const router = Router();
 
 router.route('/register').post(
@@ -22,7 +24,11 @@ router.route('/register').post(
 );
 
 router.route('/login').post(loginUser);
+
+// Private Routes
 router.route('/logout').post(auth, logOutUser);
 router.route('/refresh-token').post(auth, refreshAccessToken);
-router.route("/change-password").post(auth, passwordChange)
+router.route('/change-password').post(auth, passwordChange);
+router.route('/current-user').get(auth, getCurrentUser);
+
 export default router;

@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { ApiError } from '../utils/ApiError.js';
-
+import User from '../models/user.model.js';
 const auth = async (req, res, next) => {
     try {
         const token =
@@ -15,8 +15,8 @@ const auth = async (req, res, next) => {
         if (!decoded) {
             throw new ApiError(401, 'Unauthorized');
         }
-
-        req.user = decoded;
+        const user = await User.findById(decoded._id).select("-password -refreshToken");
+        req.user = user;
         next();
     } catch (error) {
         return res

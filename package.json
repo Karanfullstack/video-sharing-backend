@@ -10,9 +10,7 @@
     "author": "karan",
     "license": "ISC",
     "devDependencies": {
-        "@types/node": "^22.2.0",
-        "nodemon": "^3.1.4",
-        "ts-node": "^10.9.2"
+        "nodemon": "^3.1.4"
     },
     "dependencies": {
         "bcrypt": "^5.1.1",

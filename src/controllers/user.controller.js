@@ -69,8 +69,14 @@ const registerUser = asyncHandler(async (req, res) => {
     const user = await User.create({
         fullName,
         username: username.toLowerCase(),
-        avatar: avatar.url,
-        coverImage: cover?.url || '',
+        avatar: {
+            public_id: avatar.public_id,
+            url: avatar.url,
+        },
+        coverImage: {
+            public_id: cover.public_id,
+            url: cover?.url || '',
+        },
         password,
         email,
     });
@@ -105,7 +111,7 @@ const loginUser = asyncHandler(async (req, res) => {
     const isPassword = await user.isPasswordCorrect(password);
 
     if (!isPassword) {
-        throw new ApiError(401, 'Password incorrect');
+        return res.status(400).json({ message: 'Password is incorrect' });
     }
     const { refreshToken, accessToken } = await generateRefreshAndAccessToken(
         user._id
@@ -181,4 +187,31 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         );
 });
 
-export { registerUser, loginUser, logOutUser, refreshAccessToken };
+const passwordChange = asyncHandler(async (req, res) => {
+    const { newPassword, oldPassword } = req.body;
+
+    if (!newPassword || !oldPassword) {
+        return res
+            .status(400)
+            .json({ message: 'Old password and new password are required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if (!isPasswordCorrect) {
+        return res.status(401).json({ message: 'Old password is incorrect' });
+    }
+
+    user.password = newPassword;
+    await user.save({ validateBeforeSave: false });
+    return res.status(200).json({ message: 'Password changed successfully' });
+});
+
+export {
+    registerUser,
+    loginUser,
+    logOutUser,
+    refreshAccessToken,
+    passwordChange,
+};

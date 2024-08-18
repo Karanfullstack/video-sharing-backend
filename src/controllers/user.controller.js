@@ -1,12 +1,13 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import User from '../models/user.model.js';
-import { uploadOnCloudinary } from '../utils/cloudinary.js';
+import { destroyCloudinary, uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import fs from 'fs';
 import { ApiError } from '../utils/ApiError.js';
 import { options } from '../constansts.js';
 import { generateRefreshAndAccessToken } from '../utils/generateTokens.js';
 import jwt from 'jsonwebtoken';
+import { url } from 'inspector';
 
 const registerUser = asyncHandler(async (req, res) => {
     const { username, fullName, password, email } = req.body;
@@ -216,6 +217,64 @@ const getCurrentUser = asyncHandler(async (req, res) => {
         );
 });
 
+const updateUserDetails = asyncHandler(async (req, res) => {
+    const { fullName, email } = req.body;
+    if (!email || !fullName) {
+        return res
+            .status(400)
+            .json({ message: 'All fields are required', success: false });
+    }
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                fullName,
+                email,
+            },
+        },
+        { new: true }
+    );
+
+    return res
+        .status(200)
+        .json({ data: user, message: 'Updated Successfully', success: true });
+});
+
+const updateAvatar = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req.file?.path;
+    if (!avatarLocalPath) {
+        return res
+            .status(400)
+            .json({ success: false, message: 'Avatar is missing' });
+    }
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+    const avatarToDelete = req.user?.avatar?.public_id;
+
+    if (!avatar.url) {
+        return res
+            .status(500)
+            .json({ success: false, message: 'Error while uploading' });
+    }
+    const updatedUser = await User.findByIdAndUpdate(req.user?._id, {
+        $set: {
+            avatar: {
+                public_id: avatar.public_id,
+                url: avatar.url,
+            },
+        },
+    });
+
+    if (avatarToDelete && updateAvatar?.avatar?.public_id) {
+        await destroyCloudinary(avatarToDelete);
+    }
+
+    return res.status(200).json({
+        message: 'Avatar updated successfully',
+        data: updatedUser,
+        success: true,
+    });
+});
+
 export {
     registerUser,
     loginUser,
@@ -223,4 +282,6 @@ export {
     refreshAccessToken,
     passwordChange,
     getCurrentUser,
+    updateUserDetails,
+    updateAvatar,
 };

@@ -15,8 +15,11 @@ const auth = async (req, res, next) => {
         if (!decoded) {
             throw new ApiError(401, 'Unauthorized');
         }
-        const user = await User.findById(decoded._id).select("-password -refreshToken");
+        const user = await User.findById(decoded._id).select(
+            '-password -refreshToken'
+        );
         req.user = user;
+
         next();
     } catch (error) {
         return res
